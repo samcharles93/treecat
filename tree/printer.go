@@ -8,7 +8,7 @@ import (
 )
 
 // PrintTreeWithOutput prints the tree structure to the specified output file
-func PrintTreeWithOutput(node *TreeNode, prefix string, isLast bool, outputFile *os.File, startDir string) {
+func PrintTreeWithOutput(node *Node, prefix string, isLast bool, outputFile *os.File, startDir string) {
 	// Calculate relative path
 	relativePath, _ := filepath.Rel(startDir, node.Path)
 

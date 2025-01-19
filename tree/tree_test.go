@@ -68,8 +68,8 @@ func TestBuildTree(t *testing.T) {
 
 			// Count files (non-directory nodes)
 			var count int
-			var countFiles func(*TreeNode)
-			countFiles = func(node *TreeNode) {
+			var countFiles func(*Node)
+			countFiles = func(node *Node) {
 				if !node.IsDir {
 					count++
 				}

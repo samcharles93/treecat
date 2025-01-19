@@ -22,7 +22,7 @@ type ProcessOptions struct {
 }
 
 // BuildTree builds a tree structure starting from the given path
-func BuildTree(path string, excludePattern, includePattern, startDir string, maxDepth int, force bool) (*TreeNode, error) {
+func BuildTree(path string, excludePattern, includePattern, startDir string, maxDepth int, force bool) (*Node, error) {
 	opts := &ProcessOptions{
 		ExcludePattern: excludePattern,
 		IncludePattern: includePattern,
@@ -50,7 +50,7 @@ func BuildTree(path string, excludePattern, includePattern, startDir string, max
 }
 
 // processFile handles processing of a single file
-func processFile(path string, opts *ProcessOptions) (*TreeNode, error) {
+func processFile(path string, opts *ProcessOptions) (*Node, error) {
 	if !utils.ShouldIncludeFile(path, opts.ExcludePattern, opts.IncludePattern, opts.StartDir) {
 		return nil, nil
 	}
@@ -60,7 +60,7 @@ func processFile(path string, opts *ProcessOptions) (*TreeNode, error) {
 		return nil, err
 	}
 
-	node := &TreeNode{
+	node := &Node{
 		Path:  absPath,
 		Name:  filepath.Base(absPath),
 		IsDir: false,
@@ -84,13 +84,13 @@ func processFile(path string, opts *ProcessOptions) (*TreeNode, error) {
 }
 
 // processDirectory handles processing of a directory
-func processDirectory(ctx context.Context, path string, opts *ProcessOptions) (*TreeNode, error) {
+func processDirectory(ctx context.Context, path string, opts *ProcessOptions) (*Node, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
 
-	node := &TreeNode{
+	node := &Node{
 		Path:  absPath,
 		Name:  filepath.Base(absPath),
 		IsDir: true,
@@ -118,7 +118,7 @@ func processDirectory(ctx context.Context, path string, opts *ProcessOptions) (*
 }
 
 // processEntry handles processing of a single directory entry
-func processEntry(ctx context.Context, entryPath string, node *TreeNode, opts *ProcessOptions, errChan chan<- error) {
+func processEntry(ctx context.Context, entryPath string, node *Node, opts *ProcessOptions, errChan chan<- error) {
 	info, err := os.Stat(entryPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -127,7 +127,7 @@ func processEntry(ctx context.Context, entryPath string, node *TreeNode, opts *P
 		return
 	}
 
-	var child *TreeNode
+	var child *Node
 	if info.IsDir() {
 		child, err = processDirectory(ctx, entryPath, opts)
 	} else {
@@ -149,7 +149,7 @@ func processEntry(ctx context.Context, entryPath string, node *TreeNode, opts *P
 }
 
 // processChildren handles concurrent processing of directory entries
-func processChildren(ctx context.Context, node *TreeNode, entries []os.DirEntry, path string, opts *ProcessOptions) error {
+func processChildren(ctx context.Context, node *Node, entries []os.DirEntry, path string, opts *ProcessOptions) error {
 	const maxWorkers = 4
 	sem := make(chan struct{}, maxWorkers)
 	var wg sync.WaitGroup
@@ -179,7 +179,7 @@ func processChildren(ctx context.Context, node *TreeNode, entries []os.DirEntry,
 }
 
 // buildTreeWithContext is the main tree building function
-func buildTreeWithContext(ctx context.Context, path string, opts *ProcessOptions) (*TreeNode, error) {
+func buildTreeWithContext(ctx context.Context, path string, opts *ProcessOptions) (*Node, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
