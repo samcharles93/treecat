@@ -34,6 +34,10 @@ func buildTreeWithContext(ctx context.Context, path string, excludePattern, incl
 
 	info, err := os.Stat(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// Skip files that don't exist instead of returning an error
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -53,13 +57,29 @@ func buildTreeWithContext(ctx context.Context, path string, excludePattern, incl
 		if !utils.ShouldIncludeFile(path, excludePattern, includePattern, startDir) {
 			return nil, nil
 		}
-		content, err := os.ReadFile(path)
-		if err == nil {
-			if utils.IsLikelyBinary(content) {
-				node.Content = "\n[binary data omitted]\n"
-			} else {
-				node.Content = string(content)
+		file, err := os.Open(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// Skip files that don't exist
+				return nil, nil
 			}
+			// Log error but continue processing
+			fmt.Fprintf(os.Stderr, "Warning: cannot open %s: %v\n", path, err)
+			return node, nil
+		}
+		defer file.Close()
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			// Log error but continue processing
+			fmt.Fprintf(os.Stderr, "Warning: cannot read %s: %v\n", path, err)
+			return node, nil
+		}
+
+		if utils.IsLikelyBinary(content) {
+			node.Content = "\n[binary data omitted]\n"
+		} else {
+			node.Content = string(content)
 		}
 		return node, nil
 	}
@@ -88,7 +108,10 @@ func buildTreeWithContext(ctx context.Context, path string, excludePattern, incl
 
 			child, err := buildTreeWithContext(ctx, entryPath, excludePattern, includePattern, startDir)
 			if err != nil {
-				errChan <- fmt.Errorf("error processing %s: %w", entryPath, err)
+				if !os.IsNotExist(err) {
+					// Only send non-NotExist errors to errChan
+					errChan <- fmt.Errorf("error processing %s: %v", entryPath, err)
+				}
 				return
 			}
 			if child != nil {
