@@ -6,12 +6,14 @@ VERSION ?= $(shell git describe --tags --always --dirty)
 COMMIT  ?= $(shell git rev-parse --short HEAD)
 TIME    ?= $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
+.PHONY: build-prod build-all clean test install-upx compress
+
 build-prod:
-    go build -ldflags="-s -w \
-    -X main.Version=$(VERSION) \
-    -X main.BuildTime=$(TIME) \
-    -X main.GitCommit=$(COMMIT)" \
-    -trimpath -o $(BINARY_NAME) .
+	go build -ldflags="-s -w \
+	-X main.Version=$(VERSION) \
+	-X main.BuildTime=$(TIME) \
+	-X main.GitCommit=$(COMMIT)" \
+	-trimpath -o $(BINARY_NAME) .
 
 build-all:
 	@for platform in $(PLATFORMS); do \
