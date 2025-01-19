@@ -50,7 +50,7 @@ func main() {
 				Value:   false,
 			},
 		},
-		Action: func(ctx context.Context, c *cli.Command) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			startDir := "."
 			if c.NArg() > 0 {
 				startDir = c.Args().First()
