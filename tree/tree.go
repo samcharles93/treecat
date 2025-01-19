@@ -21,7 +21,13 @@ func BuildTree(path string, excludePattern, includePattern, startDir string) (*T
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	return buildTreeWithContext(ctx, path, excludePattern, includePattern, startDir)
+	startTime := time.Now()
+	tree, err := buildTreeWithContext(ctx, path, excludePattern, includePattern, startDir)
+	if err == nil {
+		elapsed := time.Since(startTime)
+		fmt.Fprintf(os.Stderr, "\nTree built in %v\n", elapsed)
+	}
+	return tree, err
 }
 
 func buildTreeWithContext(ctx context.Context, path string, excludePattern, includePattern, startDir string) (*TreeNode, error) {
