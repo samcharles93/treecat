@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 func IsLikelyBinary(data []byte) bool {
@@ -19,6 +20,12 @@ func IsLikelyBinary(data []byte) bool {
 }
 
 func ShouldIncludeFile(path, excludePattern, includePattern, startDir string) bool {
+	// Skip hidden files and directories by default
+	base := filepath.Base(path)
+	if strings.HasPrefix(base, ".") {
+		return false
+	}
+
 	if excludePattern != "" {
 		excludePath := filepath.Join(startDir, excludePattern)
 		matches, err := filepath.Glob(excludePath)

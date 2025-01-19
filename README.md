@@ -9,6 +9,7 @@ TreeCat is a command-line tool that displays directory trees with file contents.
 - 🔍 Include/exclude files using glob patterns
 - 💾 Save output to file
 - 🖥️ Cross-platform support (Linux, macOS, Windows)
+- 🎯 Skips hidden files and directories by default
 
 ## Installation
 
