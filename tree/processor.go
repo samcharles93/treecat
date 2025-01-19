@@ -11,19 +11,37 @@ import (
 	"github.com/samcharles93/treecat/utils"
 )
 
+// ProcessOptions contains all options for tree processing
+type ProcessOptions struct {
+	ExcludePattern string
+	IncludePattern string
+	StartDir       string
+	MaxDepth       int
+	CurrentDepth   int
+	Force          bool
+}
+
 // BuildTree builds a tree structure starting from the given path
 func BuildTree(path string, excludePattern, includePattern, startDir string, maxDepth int, force bool) (*TreeNode, error) {
+	opts := &ProcessOptions{
+		ExcludePattern: excludePattern,
+		IncludePattern: includePattern,
+		StartDir:       startDir,
+		MaxDepth:       maxDepth,
+		Force:          force,
+	}
+
 	// Add timeout context to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Perform safety checks
-	if err := validateDirectorySize(path, force); err != nil {
+	if err := validateDirectorySize(path, opts.Force); err != nil {
 		return nil, err
 	}
 
 	startTime := time.Now()
-	tree, err := buildTreeWithContext(ctx, path, excludePattern, includePattern, startDir, maxDepth, 0)
+	tree, err := buildTreeWithContext(ctx, path, opts)
 	if err == nil {
 		elapsed := time.Since(startTime)
 		fmt.Fprintf(os.Stderr, "\nTree built in %v\n", elapsed)
@@ -32,8 +50,8 @@ func BuildTree(path string, excludePattern, includePattern, startDir string, max
 }
 
 // processFile handles processing of a single file
-func processFile(path string, excludePattern, includePattern, startDir string) (*TreeNode, error) {
-	if !utils.ShouldIncludeFile(path, excludePattern, includePattern, startDir) {
+func processFile(path string, opts *ProcessOptions) (*TreeNode, error) {
+	if !utils.ShouldIncludeFile(path, opts.ExcludePattern, opts.IncludePattern, opts.StartDir) {
 		return nil, nil
 	}
 
@@ -53,7 +71,6 @@ func processFile(path string, excludePattern, includePattern, startDir string) (
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		// Log error but continue processing
 		fmt.Fprintf(os.Stderr, "Warning: cannot read %s: %v\n", path, err)
 		return node, nil
 	}
@@ -67,7 +84,7 @@ func processFile(path string, excludePattern, includePattern, startDir string) (
 }
 
 // processDirectory handles processing of a directory
-func processDirectory(ctx context.Context, path string, excludePattern, includePattern, startDir string, maxDepth, currentDepth int) (*TreeNode, error) {
+func processDirectory(ctx context.Context, path string, opts *ProcessOptions) (*TreeNode, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -80,7 +97,7 @@ func processDirectory(ctx context.Context, path string, excludePattern, includeP
 	}
 
 	// Skip processing children if we've reached max depth
-	if maxDepth != -1 && currentDepth >= maxDepth {
+	if opts.MaxDepth != -1 && opts.CurrentDepth >= opts.MaxDepth {
 		return node, nil
 	}
 
@@ -89,7 +106,10 @@ func processDirectory(ctx context.Context, path string, excludePattern, includeP
 		return nil, err
 	}
 
-	err = processChildren(ctx, node, entries, path, excludePattern, includePattern, startDir, maxDepth, currentDepth)
+	childOpts := *opts
+	childOpts.CurrentDepth++
+
+	err = processChildren(ctx, node, entries, path, &childOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -97,8 +117,39 @@ func processDirectory(ctx context.Context, path string, excludePattern, includeP
 	return node, nil
 }
 
+// processEntry handles processing of a single directory entry
+func processEntry(ctx context.Context, entryPath string, node *TreeNode, opts *ProcessOptions, errChan chan<- error) {
+	info, err := os.Stat(entryPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			errChan <- fmt.Errorf("error processing %s: %v", entryPath, err)
+		}
+		return
+	}
+
+	var child *TreeNode
+	if info.IsDir() {
+		child, err = processDirectory(ctx, entryPath, opts)
+	} else {
+		child, err = processFile(entryPath, opts)
+	}
+
+	if err != nil {
+		if !os.IsNotExist(err) {
+			errChan <- fmt.Errorf("error processing %s: %v", entryPath, err)
+		}
+		return
+	}
+
+	if child != nil {
+		node.mu.Lock()
+		node.Children = append(node.Children, child)
+		node.mu.Unlock()
+	}
+}
+
 // processChildren handles concurrent processing of directory entries
-func processChildren(ctx context.Context, node *TreeNode, entries []os.DirEntry, path, excludePattern, includePattern, startDir string, maxDepth, currentDepth int) error {
+func processChildren(ctx context.Context, node *TreeNode, entries []os.DirEntry, path string, opts *ProcessOptions) error {
 	const maxWorkers = 4
 	sem := make(chan struct{}, maxWorkers)
 	var wg sync.WaitGroup
@@ -112,35 +163,7 @@ func processChildren(ctx context.Context, node *TreeNode, entries []os.DirEntry,
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			var child *TreeNode
-			var err error
-
-			info, err := os.Stat(entryPath)
-			if err != nil {
-				if !os.IsNotExist(err) {
-					errChan <- fmt.Errorf("error processing %s: %v", entryPath, err)
-				}
-				return
-			}
-
-			if info.IsDir() {
-				child, err = processDirectory(ctx, entryPath, excludePattern, includePattern, startDir, maxDepth, currentDepth+1)
-			} else {
-				child, err = processFile(entryPath, excludePattern, includePattern, startDir)
-			}
-
-			if err != nil {
-				if !os.IsNotExist(err) {
-					errChan <- fmt.Errorf("error processing %s: %v", entryPath, err)
-				}
-				return
-			}
-
-			if child != nil {
-				node.mu.Lock()
-				node.Children = append(node.Children, child)
-				node.mu.Unlock()
-			}
+			processEntry(ctx, entryPath, node, opts, errChan)
 		}(childPath)
 	}
 
@@ -156,7 +179,7 @@ func processChildren(ctx context.Context, node *TreeNode, entries []os.DirEntry,
 }
 
 // buildTreeWithContext is the main tree building function
-func buildTreeWithContext(ctx context.Context, path string, excludePattern, includePattern, startDir string, maxDepth, currentDepth int) (*TreeNode, error) {
+func buildTreeWithContext(ctx context.Context, path string, opts *ProcessOptions) (*TreeNode, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -172,7 +195,7 @@ func buildTreeWithContext(ctx context.Context, path string, excludePattern, incl
 	}
 
 	if info.IsDir() {
-		return processDirectory(ctx, path, excludePattern, includePattern, startDir, maxDepth, currentDepth)
+		return processDirectory(ctx, path, opts)
 	}
-	return processFile(path, excludePattern, includePattern, startDir)
+	return processFile(path, opts)
 }
