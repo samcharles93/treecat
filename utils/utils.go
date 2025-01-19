@@ -21,46 +21,33 @@ func IsLikelyBinary(data []byte) bool {
 
 func ShouldIncludeFile(path, excludePattern, includePattern, startDir string) bool {
 	// Skip hidden files and directories by default
-	base := filepath.Base(path)
-	if strings.HasPrefix(base, ".") {
-		return false
+	parts := strings.Split(path, string(filepath.Separator))
+	for _, part := range parts {
+		if strings.HasPrefix(part, ".") {
+			return false
+		}
 	}
 
+	// If there's an exclude pattern, check if the file matches it
 	if excludePattern != "" {
-		excludePath := filepath.Join(startDir, excludePattern)
-		matches, err := filepath.Glob(excludePath)
+		matched, err := filepath.Match(excludePattern, filepath.Base(path))
 		if err != nil {
-			fmt.Println("Error in filepath.Glob for exclude pattern:", err)
+			fmt.Println("Error in filepath.Match for exclude pattern:", err)
 			return true
 		}
-
-		absPath, _ := filepath.Abs(path)
-		for _, match := range matches {
-			if absPath == match {
-				return false
-			}
+		if matched {
+			return false
 		}
 	}
 
+	// If there's an include pattern, the file must match it
 	if includePattern != "" {
-		includePath := filepath.Join(startDir, includePattern)
-		matches, err := filepath.Glob(includePath)
+		matched, err := filepath.Match(includePattern, filepath.Base(path))
 		if err != nil {
-			fmt.Println("Error in filepath.Glob for include pattern:", err)
+			fmt.Println("Error in filepath.Match for include pattern:", err)
 			return false
 		}
-
-		absPath, _ := filepath.Abs(path)
-		included := false
-		for _, match := range matches {
-			if absPath == match {
-				included = true
-				break
-			}
-		}
-		if !included {
-			return false
-		}
+		return matched
 	}
 
 	return true

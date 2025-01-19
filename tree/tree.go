@@ -49,14 +49,16 @@ func buildTreeWithContext(ctx context.Context, path string, excludePattern, incl
 	}
 
 	if !info.IsDir() {
-		if utils.ShouldIncludeFile(path, excludePattern, includePattern, startDir) {
-			content, err := os.ReadFile(path)
-			if err == nil {
-				if utils.IsLikelyBinary(content) {
-					node.Content = "\n[binary data omitted]\n"
-				} else {
-					node.Content = string(content)
-				}
+		// Only check patterns for files, not directories
+		if !utils.ShouldIncludeFile(path, excludePattern, includePattern, startDir) {
+			return nil, nil
+		}
+		content, err := os.ReadFile(path)
+		if err == nil {
+			if utils.IsLikelyBinary(content) {
+				node.Content = "\n[binary data omitted]\n"
+			} else {
+				node.Content = string(content)
 			}
 		}
 		return node, nil
@@ -76,27 +78,25 @@ func buildTreeWithContext(ctx context.Context, path string, excludePattern, incl
 	errChan := make(chan error, len(entries))
 	for _, entry := range entries {
 		childPath := filepath.Join(path, entry.Name())
-		if utils.ShouldIncludeFile(childPath, excludePattern, includePattern, startDir) {
-			wg.Add(1)
-			go func(entryPath string) {
-				defer wg.Done()
+		wg.Add(1)
+		go func(entryPath string) {
+			defer wg.Done()
 
-				// Acquire semaphore
-				sem <- struct{}{}
-				defer func() { <-sem }()
+			// Acquire semaphore
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-				child, err := buildTreeWithContext(ctx, entryPath, excludePattern, includePattern, startDir)
-				if err != nil {
-					errChan <- fmt.Errorf("error processing %s: %w", entryPath, err)
-					return
-				}
-				if child != nil {
-					node.mu.Lock()
-					node.Children = append(node.Children, child)
-					node.mu.Unlock()
-				}
-			}(childPath)
-		}
+			child, err := buildTreeWithContext(ctx, entryPath, excludePattern, includePattern, startDir)
+			if err != nil {
+				errChan <- fmt.Errorf("error processing %s: %w", entryPath, err)
+				return
+			}
+			if child != nil {
+				node.mu.Lock()
+				node.Children = append(node.Children, child)
+				node.mu.Unlock()
+			}
+		}(childPath)
 	}
 
 	// Wait for all goroutines to complete
