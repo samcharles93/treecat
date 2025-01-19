@@ -49,12 +49,23 @@ func ShouldIncludeFile(path, excludePattern, includePattern, startDir string) bo
 
 	// Convert Windows paths to forward slashes for consistent matching
 	relPath = filepath.ToSlash(relPath)
+	baseName := filepath.Base(relPath)
 
 	// If there's an exclude pattern, check if the file matches it
 	if excludePattern != "" {
 		// Convert Windows-style pattern to forward slashes
 		excludePattern = filepath.ToSlash(excludePattern)
-		matched, err := filepath.Match(excludePattern, relPath)
+		// First try matching against base name
+		matched, err := filepath.Match(excludePattern, baseName)
+		if err != nil {
+			fmt.Println("Error in filepath.Match for exclude pattern:", err)
+			return false
+		}
+		if matched {
+			return false
+		}
+		// Then try matching against full path
+		matched, err = filepath.Match(excludePattern, relPath)
 		if err != nil {
 			fmt.Println("Error in filepath.Match for exclude pattern:", err)
 			return false
@@ -68,7 +79,17 @@ func ShouldIncludeFile(path, excludePattern, includePattern, startDir string) bo
 	if includePattern != "" {
 		// Convert Windows-style pattern to forward slashes
 		includePattern = filepath.ToSlash(includePattern)
-		matched, err := filepath.Match(includePattern, relPath)
+		// First try matching against base name
+		matched, err := filepath.Match(includePattern, baseName)
+		if err != nil {
+			fmt.Println("Error in filepath.Match for include pattern:", err)
+			return false
+		}
+		if matched {
+			return true
+		}
+		// Then try matching against full path
+		matched, err = filepath.Match(includePattern, relPath)
 		if err != nil {
 			fmt.Println("Error in filepath.Match for include pattern:", err)
 			return false
