@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	Version   = "1.1.0" // Updated version: added depth control and safety features
+	Version   = "0.1.1" // Added depth control and safety features
 	BuildTime = "unknown"
 	GitCommit = "unknown"
 )
