@@ -59,6 +59,7 @@ treecat -o output.txt
 ## Performance
 
 TreeCat uses concurrent processing to improve performance when scanning large directories:
+
 - Parallel processing of directory entries
 - Worker pool to limit system resource usage
 - 30-second timeout to prevent hanging on large directories
@@ -67,6 +68,7 @@ TreeCat uses concurrent processing to improve performance when scanning large di
 ## Known Issues
 
 - On Windows, if the directory is very large, the tool may appear to hang. A 30-second timeout has been implemented to prevent this. If the timeout occurs, try using include/exclude patterns to limit the scope:
+
   ```bash
   # Example: Only include Go files
   treecat -i "*.go"
