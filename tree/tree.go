@@ -1,10 +1,13 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/samcharles93/treecat/utils"
 )
@@ -14,6 +17,21 @@ func ResolveAbsolutePath(path string) (string, error) {
 }
 
 func BuildTree(path string, excludePattern, includePattern, startDir string) (*TreeNode, error) {
+	// Add timeout context to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return buildTreeWithContext(ctx, path, excludePattern, includePattern, startDir)
+}
+
+func buildTreeWithContext(ctx context.Context, path string, excludePattern, includePattern, startDir string) (*TreeNode, error) {
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -49,17 +67,46 @@ func BuildTree(path string, excludePattern, includePattern, startDir string) (*T
 		return nil, err
 	}
 
+	// Use a worker pool for processing entries
+	const maxWorkers = 4
+	sem := make(chan struct{}, maxWorkers)
+	var wg sync.WaitGroup
+
+	// Process entries concurrently
+	errChan := make(chan error, len(entries))
 	for _, entry := range entries {
 		childPath := filepath.Join(path, entry.Name())
 		if utils.ShouldIncludeFile(childPath, excludePattern, includePattern, startDir) {
-			child, err := BuildTree(childPath, excludePattern, includePattern, startDir)
-			if err != nil {
-				// Handle error (e.g., log it)
-			}
-			if child != nil {
-				node.Children = append(node.Children, child)
-			}
+			wg.Add(1)
+			go func(entryPath string) {
+				defer wg.Done()
+
+				// Acquire semaphore
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				child, err := buildTreeWithContext(ctx, entryPath, excludePattern, includePattern, startDir)
+				if err != nil {
+					errChan <- fmt.Errorf("error processing %s: %w", entryPath, err)
+					return
+				}
+				if child != nil {
+					node.mu.Lock()
+					node.Children = append(node.Children, child)
+					node.mu.Unlock()
+				}
+			}(childPath)
 		}
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors
+	for err := range errChan {
+		// Log the error but continue processing
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
 	return node, nil
