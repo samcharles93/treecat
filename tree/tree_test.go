@@ -61,7 +61,7 @@ func TestBuildTree(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tree, err := BuildTree(tempDir, tc.excludePattern, tc.includePattern, tempDir)
+			tree, err := BuildTree(tempDir, tc.excludePattern, tc.includePattern, tempDir, -1, true) // -1 for unlimited depth, force=true for tests
 			if err != nil {
 				t.Fatal(err)
 			}

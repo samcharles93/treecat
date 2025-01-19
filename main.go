@@ -37,6 +37,18 @@ func main() {
 				Usage:   "Output file path",
 				Aliases: []string{"output", "out"},
 			},
+			&cli.IntFlag{
+				Name:    "d",
+				Usage:   "Maximum depth to traverse (default: 1)",
+				Aliases: []string{"depth"},
+				Value:   1,
+			},
+			&cli.BoolFlag{
+				Name:    "f",
+				Usage:   "Force processing of large directories",
+				Aliases: []string{"force"},
+				Value:   false,
+			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			startDir := "."
@@ -49,7 +61,7 @@ func main() {
 				return fmt.Errorf("error getting absolute path: %w", err)
 			}
 
-			root, err := tree.BuildTree(absPath, c.String("e"), c.String("i"), startDir)
+			root, err := tree.BuildTree(absPath, c.String("e"), c.String("i"), startDir, int(c.Int("d")), c.Bool("f"))
 			if err != nil {
 				return fmt.Errorf("error building tree: %w", err)
 			}
