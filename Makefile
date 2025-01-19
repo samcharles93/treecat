@@ -1,17 +1,18 @@
-# Variables
 BINARY_NAME=treecat
 DIST_DIR=dist
 PLATFORMS=linux/amd64 windows/amd64 darwin/amd64 darwin/arm64
 
-# Build for the current platform
-build:
-	go build -o $(BINARY_NAME) .
+VERSION ?= $(shell git describe --tags --always --dirty)
+COMMIT  ?= $(shell git rev-parse --short HEAD)
+TIME    ?= $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
-# Build for production (stripped and trimmed)
 build-prod:
-	go build -ldflags="-s -w" -trimpath -o $(BINARY_NAME) .
+    go build -ldflags="-s -w \
+    -X main.Version=$(VERSION) \
+    -X main.BuildTime=$(TIME) \
+    -X main.GitCommit=$(COMMIT)" \
+    -trimpath -o $(BINARY_NAME) .
 
-# Build for multiple platforms
 build-all:
 	@for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
@@ -21,20 +22,13 @@ build-all:
 		GOOS=$$os GOARCH=$$arch go build -ldflags="-s -w" -trimpath -o $$output .; \
 	done
 
-# Clean build artifacts
 clean:
 	rm -f $(BINARY_NAME) $(BINARY_NAME).exe
 	rm -rf $(DIST_DIR)
 
-# Run tests
 test:
 	go test ./...
 
-# Run the program locally
-run:
-	go run .
-
-# Install UPX for binary compression (optional)
 install-upx:
 	@echo "Installing UPX..."
 	@if ! command -v upx &> /dev/null; then \
@@ -43,11 +37,9 @@ install-upx:
 		echo "UPX is already installed."; \
 	fi
 
-# Compress binaries with UPX
 compress:
 	@for binary in $(wildcard $(DIST_DIR)/*); do \
 		upx --best $$binary; \
 	done
 
-# Default task
-.DEFAULT_GOAL := build
+.DEFAULT_GOAL := build-prod

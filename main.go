@@ -10,10 +10,17 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
+)
+
 func main() {
 	cmd := &cli.Command{
-		Name:  "treecat",
-		Usage: "Display a directory tree with file contents",
+		Name:    "treecat",
+		Usage:   "Display a directory tree with file contents",
+		Version: Version,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "e",
